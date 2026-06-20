@@ -5,3 +5,5 @@ __pycache__
 .env*
 model/
 vosk-model-*
+credentials.json
+token.json
