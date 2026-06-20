@@ -49,7 +49,7 @@ def list_upcoming_events(max_results=10, time_min=None, time_max=None):
     for item in items:
         events.append(
             {
-                "summary": item.get("summary", "(no title)"),
+                "summary": item.get("summary", "(bez názvu)"),
                 "start": item["start"].get("dateTime", item["start"].get("date")),
                 "end": item["end"].get("dateTime", item["end"].get("date")),
                 "location": item.get("location"),

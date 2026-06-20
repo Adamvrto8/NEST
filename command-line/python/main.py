@@ -157,6 +157,16 @@ audio_queue_mic = asyncio.Queue(maxsize=5)
 last_activity = 0.0
 active_timers = set()
 
+SLOVAK_WEEKDAYS = [
+    "pondelok",
+    "utorok",
+    "streda",
+    "štvrtok",
+    "piatok",
+    "sobota",
+    "nedeľa",
+]
+
 
 def _now():
     return asyncio.get_running_loop().time()
@@ -215,7 +225,7 @@ async def dispatch_function(name, args):
         return {
             "time": now.strftime("%H:%M"),
             "date": now.strftime("%Y-%m-%d"),
-            "weekday": now.strftime("%A"),
+            "weekday": SLOVAK_WEEKDAYS[now.weekday()],
         }
     if name == "set_timer":
         try:
