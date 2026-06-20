@@ -1,45 +1,23 @@
 """Gmail helpers for the voice assistant: read recent mail and create drafts.
 
-Run `python gmail_tools.py` once to authorize (opens a browser) and create
-token.json. The assistant only reads mail and writes drafts — it never sends.
+The assistant only reads mail and writes drafts — it never sends. Authorization
+is handled by google_auth_helper (run `python google_auth_helper.py` once).
 """
 import base64
-import os
 from email.message import EmailMessage
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# readonly = read mail; compose = create drafts (the code never calls send).
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.compose",
-]
-CREDENTIALS_FILE = os.environ.get("GMAIL_CREDENTIALS", "credentials.json")
-TOKEN_FILE = os.environ.get("GMAIL_TOKEN", "token.json")
+from google_auth_helper import get_credentials
 
 _service = None
 
 
 def get_service():
-    """Returns an authorized Gmail API client, running the consent flow if needed."""
+    """Returns an authorized Gmail API client."""
     global _service
-    if _service is not None:
-        return _service
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
-    _service = build("gmail", "v1", credentials=creds)
+    if _service is None:
+        _service = build("gmail", "v1", credentials=get_credentials())
     return _service
 
 
@@ -93,8 +71,3 @@ def create_draft(to, subject, body):
         .execute()
     )
     return draft["id"]
-
-
-if __name__ == "__main__":
-    get_service()
-    print(f"Gmail authorized. Token saved to {TOKEN_FILE}.")

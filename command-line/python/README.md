@@ -53,22 +53,26 @@ The assistant can call tools during a conversation:
   events with live web results.
 - **Timers** and **time/date** — local, no setup.
 - **Gmail (read & draft)** — reads recent mail and creates drafts; it never sends.
+- **Calendar (read & create)** — lists upcoming events and adds appointments.
 
-### Gmail setup (optional)
+### Google setup (optional, for Gmail & Calendar)
 
-1. In [Google Cloud](https://console.cloud.google.com/), create a project, enable the
-   **Gmail API**, and configure the OAuth consent screen as **External / Testing**
-   with your account added under **Test users**.
-2. Create an **OAuth client** of type **Desktop app**, download its JSON, and save it
+1. In [Google Cloud](https://console.cloud.google.com/), create a project and enable
+   the **Gmail API** and the **Google Calendar API**.
+2. Configure the OAuth consent screen as **External**, add your account under
+   **Test users**, and (optionally) **Publish** the app so the token doesn't expire
+   every 7 days.
+3. Create an **OAuth client** of type **Desktop app**, download its JSON, and save it
    as `credentials.json` next to `main.py`.
-3. Authorize once (opens a browser, writes `token.json`):
+4. Authorize once (opens a browser, writes `token.json` for all scopes):
 
    ```bash
-   python gmail_tools.py
+   python google_auth_helper.py
    ```
 
    On a headless Raspberry Pi, run this on a machine with a browser and copy the
-   resulting `token.json` to the Pi.
+   resulting `token.json` over. Set `CALENDAR_TIMEZONE` (e.g. `Europe/Bratislava`)
+   if you're not in the default zone.
 
 ## Run
 

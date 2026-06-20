@@ -91,6 +91,48 @@ TOOL_DECLARATIONS = [
             "required": ["to", "subject", "body"],
         },
     },
+    {
+        "name": "list_calendar_events",
+        "description": "List upcoming events from the user's Google Calendar. Use when the user asks about their schedule, calendar, or agenda. For a specific day, pass time_min and time_max.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of events to return (default 10).",
+                },
+                "time_min": {
+                    "type": "string",
+                    "description": "Optional ISO 8601 start of range, e.g. 2026-06-21T00:00:00. Defaults to now.",
+                },
+                "time_max": {
+                    "type": "string",
+                    "description": "Optional ISO 8601 end of range, e.g. 2026-06-21T23:59:59.",
+                },
+            },
+        },
+    },
+    {
+        "name": "create_calendar_event",
+        "description": "Create an event in the user's Google Calendar. Use when the user wants to add an appointment or reminder. Resolve relative dates like 'tomorrow' to an absolute ISO 8601 value first, calling get_current_time if needed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "Title of the event."},
+                "start": {
+                    "type": "string",
+                    "description": "Start as ISO 8601: 'YYYY-MM-DDTHH:MM:SS' for a timed event, or 'YYYY-MM-DD' for an all-day event.",
+                },
+                "end": {
+                    "type": "string",
+                    "description": "End as ISO 8601, same format as start.",
+                },
+                "location": {"type": "string", "description": "Optional location."},
+                "description": {"type": "string", "description": "Optional notes."},
+            },
+            "required": ["summary", "start", "end"],
+        },
+    },
 ]
 
 MODEL = "gemini-3.1-flash-live-preview"
@@ -196,6 +238,35 @@ async def dispatch_function(name, args):
             return {"status": "ok", "draft_id": draft_id}
         except Exception as exc:
             return {"status": "error", "message": f"Gmail unavailable: {exc}"}
+    if name == "list_calendar_events":
+        try:
+            import calendar_tools
+            events = await asyncio.to_thread(
+                calendar_tools.list_upcoming_events,
+                int(args.get("max_results", 10)),
+                args.get("time_min"),
+                args.get("time_max"),
+            )
+            return {"count": len(events), "events": events}
+        except Exception as exc:
+            return {"status": "error", "message": f"Calendar unavailable: {exc}"}
+    if name == "create_calendar_event":
+        summary, start, end = args.get("summary"), args.get("start"), args.get("end")
+        if not (summary and start and end):
+            return {"status": "error", "message": "Missing summary, start, or end."}
+        try:
+            import calendar_tools
+            event_id = await asyncio.to_thread(
+                calendar_tools.create_event,
+                summary,
+                start,
+                end,
+                args.get("description"),
+                args.get("location"),
+            )
+            return {"status": "ok", "event_id": event_id}
+        except Exception as exc:
+            return {"status": "error", "message": f"Calendar unavailable: {exc}"}
     return {"status": "error", "message": f"Unknown function: {name}"}
 
 
