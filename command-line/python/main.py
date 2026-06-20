@@ -1,6 +1,8 @@
 import asyncio
 import json
+import math
 import os
+import struct
 from google import genai
 import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
@@ -23,7 +25,7 @@ CHUNK_SIZE = 1024
 # WAKE_PHRASES are the spoken phrases that activate the assistant; add homophones
 # (e.g. "hey jean") if Vosk mishears your pronunciation of "gin".
 VOSK_MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", "model")
-WAKE_PHRASES = ["hey gin"]
+WAKE_PHRASES = ["hey gin", "hey jean", "hey gene"]
 
 # Return to wake-word listening after this many seconds without speech.
 CONVERSATION_TIMEOUT = 15
@@ -51,6 +53,24 @@ def _now():
 def _drain(queue):
     while not queue.empty():
         queue.get_nowait()
+
+
+def play_beep(freq=880, duration=0.15):
+    """Plays a short tone so the user knows the wake word registered."""
+    n = int(RECEIVE_SAMPLE_RATE * duration)
+    fade = int(RECEIVE_SAMPLE_RATE * 0.01)
+    samples = bytearray()
+    for i in range(n):
+        env = min(1.0, i / fade, (n - i) / fade)  # fade in/out to avoid clicks
+        value = int(0.3 * 32767 * env * math.sin(2 * math.pi * freq * i / RECEIVE_SAMPLE_RATE))
+        samples += struct.pack("<h", value)
+    stream = pya.open(
+        format=FORMAT, channels=CHANNELS, rate=RECEIVE_SAMPLE_RATE, output=True
+    )
+    try:
+        stream.write(bytes(samples))
+    finally:
+        stream.close()
 
 
 def load_wake_model():
@@ -200,6 +220,7 @@ async def run():
     try:
         while True:
             await asyncio.to_thread(wait_for_wake_word, wake_model)
+            await asyncio.to_thread(play_beep)
             print("\nWake word detected — connecting to Gemini...")
             async with client.aio.live.connect(
                 model=MODEL, config=CONFIG
