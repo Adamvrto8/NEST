@@ -19,7 +19,25 @@ uv venv
 source .venv/bin/activate
 
 # Install dependencies
-  uv pip install google-genai pyaudio
+  uv pip install google-genai pyaudio pvporcupine
+```
+
+## Wake word
+
+The assistant stays idle and listens locally for a wake word; it only connects to
+Gemini once it hears one. It returns to sleep after a short silent pause.
+
+- Get a free Picovoice access key at [console.picovoice.ai](https://console.picovoice.ai)
+  and export it as `PV_ACCESS_KEY`.
+- The exact phrase **"Hey Gin"** is a custom keyword: generate a `.ppn` file in the
+  Picovoice Console (select **Raspberry Pi** as the platform) and point
+  `WAKE_KEYWORD_PATH` at it.
+- Without `WAKE_KEYWORD_PATH` it falls back to the built-in keyword `jarvis`, so you
+  can test before generating the custom file.
+
+```bash
+export PV_ACCESS_KEY="your-picovoice-key"
+export WAKE_KEYWORD_PATH="Hey-Gin_en_raspberry-pi_v3_0_0.ppn"  # optional
 ```
 
 ## Run
