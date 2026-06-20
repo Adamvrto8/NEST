@@ -1,9 +1,11 @@
 import asyncio
+import datetime
 import json
 import math
 import os
 import struct
 from google import genai
+from google.genai import types
 import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
@@ -33,11 +35,42 @@ CONVERSATION_TIMEOUT = 15
 pya = pyaudio.PyAudio()
 
 # --- Live API config ---
+# Custom functions the model can call. Add new connectors (Gmail, etc.) here and
+# implement them in dispatch_function().
+TOOL_DECLARATIONS = [
+    {
+        "name": "get_current_time",
+        "description": "Get the current local date and time. Use when the user asks what time or what day it is.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "set_timer",
+        "description": "Set a countdown timer or alarm that beeps when it finishes. Use for kitchen timers or reminders after a delay.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "seconds": {
+                    "type": "integer",
+                    "description": "Timer duration in seconds.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional short description of what the timer is for.",
+                },
+            },
+            "required": ["seconds"],
+        },
+    },
+]
+
 MODEL = "gemini-3.1-flash-live-preview"
 CONFIG = {
     "response_modalities": ["AUDIO"],
     "system_instruction": "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky, ani keď používateľ použije cudzie slovo. Hovor zdvorilo a používaj jednoduché vety vhodné pre staršieho používateľa. Ak sa ťa používateľ spýta na aktuálne informácie ako počasie, správy, čas alebo udalosti, vyhľadaj odpoveď na internete.",
-    "tools": [{"google_search": {}}],
+    "tools": [
+        {"google_search": {}},
+        {"function_declarations": TOOL_DECLARATIONS},
+    ],
     "output_audio_transcription": {},
     "input_audio_transcription": {},
 }
@@ -45,6 +78,7 @@ CONFIG = {
 audio_queue_output = asyncio.Queue()
 audio_queue_mic = asyncio.Queue(maxsize=5)
 last_activity = 0.0
+active_timers = set()
 
 
 def _now():
@@ -72,6 +106,55 @@ def play_beep(freq=880, duration=0.15):
         stream.write(bytes(samples))
     finally:
         stream.close()
+
+
+async def _run_timer(seconds, label):
+    """Sleeps for the timer, then beeps an alarm even if back in wake-word mode."""
+    await asyncio.sleep(seconds)
+    suffix = f" ({label})" if label else ""
+    print(f"\n⏰ Časovač{suffix} dozvonil.")
+    for _ in range(3):
+        await asyncio.to_thread(play_beep, 1046, 0.2)
+        await asyncio.sleep(0.15)
+
+
+def start_timer(seconds, label=None):
+    """Schedules a timer as a standalone task that outlives the conversation."""
+    task = asyncio.create_task(_run_timer(seconds, label))
+    active_timers.add(task)
+    task.add_done_callback(active_timers.discard)
+
+
+async def dispatch_function(name, args):
+    """Runs a tool the model asked for and returns a JSON-serializable result."""
+    if name == "get_current_time":
+        now = datetime.datetime.now()
+        return {
+            "time": now.strftime("%H:%M"),
+            "date": now.strftime("%Y-%m-%d"),
+            "weekday": now.strftime("%A"),
+        }
+    if name == "set_timer":
+        try:
+            seconds = int(args.get("seconds"))
+        except (TypeError, ValueError):
+            return {"status": "error", "message": "Invalid duration."}
+        if seconds <= 0:
+            return {"status": "error", "message": "Duration must be positive."}
+        start_timer(seconds, args.get("label"))
+        return {"status": "ok", "seconds": seconds, "label": args.get("label")}
+    return {"status": "error", "message": f"Unknown function: {name}"}
+
+
+async def handle_tool_call(session, tool_call):
+    """Executes the model's function calls and sends their results back."""
+    responses = []
+    for fc in tool_call.function_calls:
+        result = await dispatch_function(fc.name, fc.args or {})
+        responses.append(
+            types.FunctionResponse(id=fc.id, name=fc.name, response=result)
+        )
+    await session.send_tool_response(function_responses=responses)
 
 
 def load_wake_model():
@@ -144,6 +227,10 @@ async def receive_audio(session):
     while True:
         turn = session.receive()
         async for response in turn:
+            if response.tool_call:
+                last_activity = _now()
+                await handle_tool_call(session, response.tool_call)
+                continue
             sc = response.server_content
             if not sc:
                 continue
