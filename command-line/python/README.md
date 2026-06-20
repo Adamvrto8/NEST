@@ -19,9 +19,7 @@ uv venv
 source .venv/bin/activate
 
 # Install dependencies
-  uv pip install google-genai pyaudio vosk
-  # Optional, only for the Gmail tools:
-  uv pip install google-api-python-client google-auth-oauthlib
+  uv pip install -r requirements.txt
 ```
 
 ## Wake word
@@ -96,7 +94,22 @@ export GEMINI_API_KEY="your-api-key"
 python main.py
 ```
 
-You should see **"Connected to Gemini. Start speaking!"** — talk into your mic and Gemini will respond with audio. Press `Ctrl+C` to quit.
+You should see **"Smart speaker ready. Waiting for wake word…"** — say the wake word,
+then talk; Gemini responds with audio. Press `Ctrl+C` to quit. The app recovers from
+network/session errors on its own and returns to wake-word listening.
+
+## Run on boot (Raspberry Pi)
+
+Use the included `smart-speaker.service` so the app starts on boot and restarts if it
+crashes. Edit the `User` and paths in it, then:
+
+```bash
+echo 'GEMINI_API_KEY=your-key' | sudo tee /etc/default/smart-speaker
+sudo cp smart-speaker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now smart-speaker
+journalctl -u smart-speaker -f   # follow logs
+```
 
 ## Real-time Audio Stream Translation
 

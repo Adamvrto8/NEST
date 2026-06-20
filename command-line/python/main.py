@@ -31,6 +31,8 @@ WAKE_PHRASES = ["hey gin", "hey jean", "hey gene"]
 
 # Return to wake-word listening after this many seconds without speech.
 CONVERSATION_TIMEOUT = 15
+# Wait this long after a connection/session error before listening again.
+RECONNECT_DELAY = 3
 
 pya = pyaudio.PyAudio()
 
@@ -452,15 +454,24 @@ async def run():
     print(f'Smart speaker ready. Waiting for wake word ("{WAKE_PHRASES[0]}")...')
     try:
         while True:
-            await asyncio.to_thread(wait_for_wake_word, wake_model)
-            await asyncio.to_thread(play_beep)
-            print("\nWake word detected — connecting to Gemini...")
-            async with client.aio.live.connect(
-                model=MODEL, config=CONFIG
-            ) as live_session:
-                print("Connected. Start speaking!")
-                await converse(live_session)
-            print("Returning to sleep.\n")
+            try:
+                await asyncio.to_thread(wait_for_wake_word, wake_model)
+                await asyncio.to_thread(play_beep)
+                print("\nWake word detected — connecting to Gemini...")
+                async with client.aio.live.connect(
+                    model=MODEL, config=CONFIG
+                ) as live_session:
+                    print("Connected. Start speaking!")
+                    await converse(live_session)
+                print("Returning to sleep.\n")
+            except Exception as exc:
+                # Recover from network/session/audio errors instead of exiting.
+                print(f"\nSession error, recovering: {exc}")
+                try:
+                    await asyncio.to_thread(play_beep, 320, 0.2)  # low error tone
+                except Exception:
+                    pass
+                await asyncio.sleep(RECONNECT_DELAY)
     except asyncio.CancelledError:
         pass
     finally:

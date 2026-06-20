@@ -1,0 +1,24 @@
+# systemd unit for the Slovak smart speaker.
+# Adjust User and the two paths to match your Pi, then:
+#   sudo cp smart-speaker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now smart-speaker
+# Logs: journalctl -u smart-speaker -f
+[Unit]
+Description=Gemini Live Slovak smart speaker
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/gemini-live-api-examples/command-line/python
+# Put GEMINI_API_KEY (and any BRIEF_*/VOSK_MODEL_PATH overrides) in this file.
+# The leading "-" makes it optional so the service still starts if it is absent.
+EnvironmentFile=-/etc/default/smart-speaker
+ExecStart=/home/pi/gemini-live-api-examples/command-line/python/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+# Core voice assistant
+google-genai==2.9.0
+PyAudio==0.2.14
+vosk==0.3.45
+
+# Daily brief (weather + news)
+requests==2.34.2
+feedparser==6.0.12
+
+# Gmail & Calendar tools (optional)
+google-api-python-client==2.197.0
+google-auth-oauthlib==1.4.0
