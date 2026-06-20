@@ -36,7 +36,8 @@ pya = pyaudio.PyAudio()
 MODEL = "gemini-3.1-flash-live-preview"
 CONFIG = {
     "response_modalities": ["AUDIO"],
-    "system_instruction": "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky, ani keď používateľ použije cudzie slovo. Hovor zdvorilo a používaj jednoduché vety vhodné pre staršieho používateľa ",
+    "system_instruction": "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky, ani keď používateľ použije cudzie slovo. Hovor zdvorilo a používaj jednoduché vety vhodné pre staršieho používateľa. Ak sa ťa používateľ spýta na aktuálne informácie ako počasie, správy, čas alebo udalosti, vyhľadaj odpoveď na internete.",
+    "tools": [{"google_search": {}}],
     "output_audio_transcription": {},
     "input_audio_transcription": {},
 }
