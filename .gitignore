@@ -6,4 +6,5 @@ __pycache__
 model/
 vosk-model-*
 credentials.json
+client_secret_*.json
 token.json

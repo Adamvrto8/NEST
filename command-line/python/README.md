@@ -20,6 +20,8 @@ source .venv/bin/activate
 
 # Install dependencies
   uv pip install google-genai pyaudio vosk
+  # Optional, only for the Gmail tools:
+  uv pip install google-api-python-client google-auth-oauthlib
 ```
 
 ## Wake word
@@ -42,6 +44,31 @@ add homophones (e.g. `"hey jean"`) if Vosk mishears your pronunciation.
 ```bash
 export VOSK_MODEL_PATH="model"  # optional; defaults to ./model
 ```
+
+## Tools
+
+The assistant can call tools during a conversation:
+
+- **Google Search** — built in; answers questions about weather, news, and current
+  events with live web results.
+- **Timers** and **time/date** — local, no setup.
+- **Gmail (read & draft)** — reads recent mail and creates drafts; it never sends.
+
+### Gmail setup (optional)
+
+1. In [Google Cloud](https://console.cloud.google.com/), create a project, enable the
+   **Gmail API**, and configure the OAuth consent screen as **External / Testing**
+   with your account added under **Test users**.
+2. Create an **OAuth client** of type **Desktop app**, download its JSON, and save it
+   as `credentials.json` next to `main.py`.
+3. Authorize once (opens a browser, writes `token.json`):
+
+   ```bash
+   python gmail_tools.py
+   ```
+
+   On a headless Raspberry Pi, run this on a machine with a browser and copy the
+   resulting `token.json` to the Pi.
 
 ## Run
 

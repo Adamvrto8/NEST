@@ -61,6 +61,36 @@ TOOL_DECLARATIONS = [
             "required": ["seconds"],
         },
     },
+    {
+        "name": "read_emails",
+        "description": "Read the user's recent Gmail messages. Use when the user asks to check or read their email or inbox.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "max_results": {
+                    "type": "integer",
+                    "description": "How many emails to fetch (default 5).",
+                },
+                "only_unread": {
+                    "type": "boolean",
+                    "description": "If true, only unread emails (default true).",
+                },
+            },
+        },
+    },
+    {
+        "name": "draft_email",
+        "description": "Create a draft email for the user to review and send later. This never sends automatically. Use when the user wants to write or reply to an email.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Recipient email address."},
+                "subject": {"type": "string", "description": "Email subject line."},
+                "body": {"type": "string", "description": "Body text of the email."},
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
 ]
 
 MODEL = "gemini-3.1-flash-live-preview"
@@ -143,6 +173,29 @@ async def dispatch_function(name, args):
             return {"status": "error", "message": "Duration must be positive."}
         start_timer(seconds, args.get("label"))
         return {"status": "ok", "seconds": seconds, "label": args.get("label")}
+    if name == "read_emails":
+        try:
+            import gmail_tools
+            emails = await asyncio.to_thread(
+                gmail_tools.list_recent_emails,
+                int(args.get("max_results", 5)),
+                bool(args.get("only_unread", True)),
+            )
+            return {"count": len(emails), "emails": emails}
+        except Exception as exc:
+            return {"status": "error", "message": f"Gmail unavailable: {exc}"}
+    if name == "draft_email":
+        to, subject, body = args.get("to"), args.get("subject"), args.get("body")
+        if not (to and subject and body):
+            return {"status": "error", "message": "Missing recipient, subject, or body."}
+        try:
+            import gmail_tools
+            draft_id = await asyncio.to_thread(
+                gmail_tools.create_draft, to, subject, body
+            )
+            return {"status": "ok", "draft_id": draft_id}
+        except Exception as exc:
+            return {"status": "error", "message": f"Gmail unavailable: {exc}"}
     return {"status": "error", "message": f"Unknown function: {name}"}
 
 
