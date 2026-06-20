@@ -13,15 +13,16 @@ import requests
 import calendar_tools
 import gmail_tools
 
-# Personalization (defaults: Bratislava, Slovak Google News).
-USER_NAME = os.environ.get("BRIEF_USER_NAME", "")
+# Personalization (defaults tuned for Lubo: Bratislava weather, SME news).
+USER_NAME = os.environ.get("BRIEF_USER_NAME", "Lubo")
 LATITUDE = float(os.environ.get("BRIEF_LATITUDE", "48.1486"))
 LONGITUDE = float(os.environ.get("BRIEF_LONGITUDE", "17.1077"))
-NEWS_FEED_URL = os.environ.get(
-    "BRIEF_NEWS_FEED", "https://news.google.com/rss?hl=sk&gl=SK&ceid=SK:sk"
-)
+NEWS_FEED_URL = os.environ.get("BRIEF_NEWS_FEED", "https://www.sme.sk/rss")
 NEWS_COUNT = int(os.environ.get("BRIEF_NEWS_COUNT", "5"))
 MAIL_COUNT = int(os.environ.get("BRIEF_MAIL_COUNT", "5"))
+
+# Some feeds block the default feedparser agent; identify as a normal client.
+NEWS_USER_AGENT = "Mozilla/5.0 (compatible; SmartSpeaker/1.0)"
 
 # WMO weather codes (Open-Meteo) → short descriptions.
 WEATHER_CODES = {
@@ -82,7 +83,11 @@ def get_weather():
 
 def get_news():
     """Returns the top headlines from the configured RSS feed."""
-    feed = feedparser.parse(NEWS_FEED_URL)
+    resp = requests.get(
+        NEWS_FEED_URL, headers={"User-Agent": NEWS_USER_AGENT}, timeout=10
+    )
+    resp.raise_for_status()
+    feed = feedparser.parse(resp.content)
     return [entry.get("title", "") for entry in feed.entries[:NEWS_COUNT]]
 
 

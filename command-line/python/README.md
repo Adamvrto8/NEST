@@ -65,7 +65,7 @@ Configure with environment variables (all optional):
 | --- | --- | --- |
 | `BRIEF_USER_NAME` | — | Name the assistant greets in the brief |
 | `BRIEF_LATITUDE` / `BRIEF_LONGITUDE` | Bratislava | Location for weather (Open-Meteo, no key) |
-| `BRIEF_NEWS_FEED` | Slovak Google News | RSS feed URL for headlines — point at any site's RSS |
+| `BRIEF_NEWS_FEED` | SME (sme.sk) | RSS feed URL for headlines — point at any site's RSS |
 | `BRIEF_NEWS_COUNT` / `BRIEF_MAIL_COUNT` | 5 | How many headlines / unread emails to include |
 
 Weather and news need no setup; calendar and mail use the Google auth above.
