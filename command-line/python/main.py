@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
-import struct
 from google import genai
 import pyaudio
-import pvporcupine
+from vosk import Model, KaldiRecognizer, SetLogLevel
+
+SetLogLevel(-1)  # silence Vosk/Kaldi startup logging
 
 client = genai.Client()
 
@@ -15,13 +17,13 @@ RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE = 1024
 
 # --- Wake word config ---
-# "Hey Gin" is a custom phrase, so it needs a free model file (.ppn) generated
-# at https://console.picovoice.ai (choose "Raspberry Pi" as the platform). Point
-# WAKE_KEYWORD_PATH at that file. Leave it unset to fall back to the built-in
-# keyword in WAKE_BUILTIN so you can test before generating the custom file.
-PV_ACCESS_KEY = os.environ.get("PV_ACCESS_KEY")
-WAKE_KEYWORD_PATH = os.environ.get("WAKE_KEYWORD_PATH")
-WAKE_BUILTIN = "jarvis"
+# Wake-word detection runs fully offline with Vosk — no account, key, or payment.
+# Download a small English model (~40 MB), unzip it, and point VOSK_MODEL_PATH at
+# the folder: https://alphacephei.com/vosk/models (e.g. vosk-model-small-en-us-0.15).
+# WAKE_PHRASES are the spoken phrases that activate the assistant; add homophones
+# (e.g. "hey jean") if Vosk mishears your pronunciation of "gin".
+VOSK_MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", "model")
+WAKE_PHRASES = ["hey gin"]
 
 # Return to wake-word listening after this many seconds without speech.
 CONVERSATION_TIMEOUT = 15
@@ -51,33 +53,36 @@ def _drain(queue):
         queue.get_nowait()
 
 
-def create_porcupine():
-    """Creates the Porcupine wake-word detector from the configured keyword."""
-    if not PV_ACCESS_KEY:
+def load_wake_model():
+    """Loads the offline Vosk model used for local wake-word detection."""
+    if not os.path.isdir(VOSK_MODEL_PATH):
         raise RuntimeError(
-            "Set PV_ACCESS_KEY — get a free key at https://console.picovoice.ai"
+            f"Vosk model not found at '{VOSK_MODEL_PATH}'. Download one from "
+            "https://alphacephei.com/vosk/models, unzip it, and set VOSK_MODEL_PATH."
         )
-    if WAKE_KEYWORD_PATH:
-        return pvporcupine.create(
-            access_key=PV_ACCESS_KEY, keyword_paths=[WAKE_KEYWORD_PATH]
-        )
-    return pvporcupine.create(access_key=PV_ACCESS_KEY, keywords=[WAKE_BUILTIN])
+    return Model(VOSK_MODEL_PATH)
 
 
-def wait_for_wake_word(porcupine):
-    """Blocks on the mic locally until the wake word is heard (no network use)."""
+def wait_for_wake_word(model):
+    """Blocks on the mic locally until a wake phrase is heard (no network use)."""
+    # Restrict recognition to the wake phrases (+ "[unk]") for speed and accuracy.
+    grammar = json.dumps(WAKE_PHRASES + ["[unk]"])
+    recognizer = KaldiRecognizer(model, SEND_SAMPLE_RATE, grammar)
     stream = pya.open(
         format=FORMAT,
         channels=CHANNELS,
-        rate=porcupine.sample_rate,
+        rate=SEND_SAMPLE_RATE,
         input=True,
-        frames_per_buffer=porcupine.frame_length,
+        frames_per_buffer=CHUNK_SIZE,
     )
     try:
         while True:
-            data = stream.read(porcupine.frame_length, exception_on_overflow=False)
-            pcm = struct.unpack_from("%dh" % porcupine.frame_length, data)
-            if porcupine.process(pcm) >= 0:
+            data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+            if recognizer.AcceptWaveform(data):
+                text = json.loads(recognizer.Result()).get("text", "")
+            else:
+                text = json.loads(recognizer.PartialResult()).get("partial", "")
+            if any(phrase in text for phrase in WAKE_PHRASES):
                 return
     finally:
         stream.close()
@@ -190,12 +195,11 @@ async def converse(session):
 
 async def run():
     """Waits for the wake word, then opens a Gemini conversation on demand."""
-    porcupine = create_porcupine()
-    label = WAKE_KEYWORD_PATH or f'"{WAKE_BUILTIN}"'
-    print(f"Smart speaker ready. Waiting for wake word ({label})...")
+    wake_model = load_wake_model()
+    print(f'Smart speaker ready. Waiting for wake word ("{WAKE_PHRASES[0]}")...')
     try:
         while True:
-            await asyncio.to_thread(wait_for_wake_word, porcupine)
+            await asyncio.to_thread(wait_for_wake_word, wake_model)
             print("\nWake word detected — connecting to Gemini...")
             async with client.aio.live.connect(
                 model=MODEL, config=CONFIG
@@ -206,7 +210,6 @@ async def run():
     except asyncio.CancelledError:
         pass
     finally:
-        porcupine.delete()
         pya.terminate()
         print("\nShut down.")
 

@@ -19,7 +19,7 @@ uv venv
 source .venv/bin/activate
 
 # Install dependencies
-  uv pip install google-genai pyaudio pvporcupine
+  uv pip install google-genai pyaudio vosk
 ```
 
 ## Wake word
@@ -27,17 +27,20 @@ source .venv/bin/activate
 The assistant stays idle and listens locally for a wake word; it only connects to
 Gemini once it hears one. It returns to sleep after a short silent pause.
 
-- Get a free Picovoice access key at [console.picovoice.ai](https://console.picovoice.ai)
-  and export it as `PV_ACCESS_KEY`.
-- The exact phrase **"Hey Gin"** is a custom keyword: generate a `.ppn` file in the
-  Picovoice Console (select **Raspberry Pi** as the platform) and point
-  `WAKE_KEYWORD_PATH` at it.
-- Without `WAKE_KEYWORD_PATH` it falls back to the built-in keyword `jarvis`, so you
-  can test before generating the custom file.
+Wake-word detection uses [Vosk](https://alphacephei.com/vosk/), which runs fully
+offline — no account, API key, or payment.
+
+1. Download a small English model (~40 MB) from
+   [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models), e.g.
+   `vosk-model-small-en-us-0.15`.
+2. Unzip it and either rename the folder to `model` (the default) or set
+   `VOSK_MODEL_PATH` to its location.
+
+The wake phrase is **"Hey Gin"** — edit `WAKE_PHRASES` in `main.py` to change it or
+add homophones (e.g. `"hey jean"`) if Vosk mishears your pronunciation.
 
 ```bash
-export PV_ACCESS_KEY="your-picovoice-key"
-export WAKE_KEYWORD_PATH="Hey-Gin_en_raspberry-pi_v3_0_0.ppn"  # optional
+export VOSK_MODEL_PATH="model"  # optional; defaults to ./model
 ```
 
 ## Run
