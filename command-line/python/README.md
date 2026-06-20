@@ -54,6 +54,21 @@ The assistant can call tools during a conversation:
 - **Timers** and **time/date** — local, no setup.
 - **Gmail (read & draft)** — reads recent mail and creates drafts; it never sends.
 - **Calendar (read & create)** — lists upcoming events and adds appointments.
+- **Daily brief** — say *"chcem prehľad"* for a personalized morning briefing:
+  today's weather, top news headlines, today's calendar, and unread mail in one go.
+
+### Daily brief settings
+
+Configure with environment variables (all optional):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BRIEF_USER_NAME` | — | Name the assistant greets in the brief |
+| `BRIEF_LATITUDE` / `BRIEF_LONGITUDE` | Bratislava | Location for weather (Open-Meteo, no key) |
+| `BRIEF_NEWS_FEED` | Slovak Google News | RSS feed URL for headlines — point at any site's RSS |
+| `BRIEF_NEWS_COUNT` / `BRIEF_MAIL_COUNT` | 5 | How many headlines / unread emails to include |
+
+Weather and news need no setup; calendar and mail use the Google auth above.
 
 ### Google setup (optional, for Gmail & Calendar)
 

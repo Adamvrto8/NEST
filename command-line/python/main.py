@@ -39,6 +39,11 @@ pya = pyaudio.PyAudio()
 # implement them in dispatch_function().
 TOOL_DECLARATIONS = [
     {
+        "name": "get_daily_brief",
+        "description": "Get the user's personalized daily brief in one call: today's weather, top news headlines, today's calendar events, and recent unread emails. Use when the user asks for a 'prehľad', a summary, a morning briefing, or 'čo je nové'.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
         "name": "get_current_time",
         "description": "Get the current local date and time. Use when the user asks what time or what day it is.",
         "parameters": {"type": "object", "properties": {}},
@@ -138,7 +143,7 @@ TOOL_DECLARATIONS = [
 MODEL = "gemini-3.1-flash-live-preview"
 CONFIG = {
     "response_modalities": ["AUDIO"],
-    "system_instruction": "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky, ani keď používateľ použije cudzie slovo. Hovor zdvorilo a používaj jednoduché vety vhodné pre staršieho používateľa. Ak sa ťa používateľ spýta na aktuálne informácie ako počasie, správy, čas alebo udalosti, vyhľadaj odpoveď na internete.",
+    "system_instruction": "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky, ani keď používateľ použije cudzie slovo. Hovor zdvorilo a používaj jednoduché vety vhodné pre staršieho používateľa. Ak sa ťa používateľ spýta na aktuálne informácie ako počasie, správy, čas alebo udalosti, vyhľadaj odpoveď na internete. Keď používateľ požiada o prehľad, zavolaj nástroj get_daily_brief a zhrň počasie, správy, dnešný kalendár a emaily prirodzene, vrúcne a stručne, akoby si čítal ranný prehľad.",
     "tools": [
         {"google_search": {}},
         {"function_declarations": TOOL_DECLARATIONS},
@@ -199,6 +204,12 @@ def start_timer(seconds, label=None):
 
 async def dispatch_function(name, args):
     """Runs a tool the model asked for and returns a JSON-serializable result."""
+    if name == "get_daily_brief":
+        try:
+            import daily_brief
+            return await asyncio.to_thread(daily_brief.build_brief)
+        except Exception as exc:
+            return {"status": "error", "message": f"Brief unavailable: {exc}"}
     if name == "get_current_time":
         now = datetime.datetime.now()
         return {
