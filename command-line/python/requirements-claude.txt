@@ -1,0 +1,4 @@
+# Extra dependency for the Claude-brained pipeline (main_claude.py).
+# Install on top of requirements.txt + requirements-local.txt:
+#   pip install -r requirements-claude.txt
+anthropic==0.111.0
