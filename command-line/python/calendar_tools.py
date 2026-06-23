@@ -31,17 +31,31 @@ def _event_time(value):
     return {"dateTime": value, "timeZone": CALENDAR_TIMEZONE}
 
 
+def _to_rfc3339(value):
+    """Normalizes a date/datetime string to RFC3339 with a timezone offset."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.astimezone()  # the API requires a timezone on timeMin/timeMax
+    return parsed.isoformat()
+
+
 def list_upcoming_events(max_results=10, time_min=None, time_max=None):
     """Returns upcoming events from the primary calendar, soonest first."""
     service = get_service()
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     params = {
         "calendarId": "primary",
-        "timeMin": time_min or now,
+        "timeMin": _to_rfc3339(time_min) or now,
         "maxResults": max_results,
         "singleEvents": True,
         "orderBy": "startTime",
     }
+    time_max = _to_rfc3339(time_max)
     if time_max:
         params["timeMax"] = time_max
     items = service.events().list(**params).execute().get("items", [])
