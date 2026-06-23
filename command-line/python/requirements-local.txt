@@ -1,0 +1,6 @@
+# Extra dependencies for the free, turn-based pipeline (main_local.py).
+# Install on top of requirements.txt:  pip install -r requirements-local.txt
+faster-whisper==1.2.1   # local Slovak speech-to-text
+numpy==2.5.0            # audio buffer math (pulled in by faster-whisper)
+edge-tts==7.2.8         # free Slovak neural text-to-speech
+miniaudio==1.71         # decode edge-tts mp3 for playback
