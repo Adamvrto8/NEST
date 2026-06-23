@@ -163,18 +163,21 @@ CONFIG = types.GenerateContentConfig(
 )
 
 
-def play_beep(freq=880, duration=0.15):
+def play_beep(freq=880, duration=0.25):
     """Plays a short tone for wake/timer feedback."""
     n = int(SAMPLE_RATE * duration)
     fade = int(SAMPLE_RATE * 0.01)
+    pad = int(SAMPLE_RATE * 0.25)  # trailing silence so Bluetooth output isn't cut off
     samples = bytearray()
     for i in range(n):
         env = min(1.0, i / fade, (n - i) / fade)
-        value = int(0.3 * 32767 * env * math.sin(2 * math.pi * freq * i / SAMPLE_RATE))
+        value = int(0.45 * 32767 * env * math.sin(2 * math.pi * freq * i / SAMPLE_RATE))
         samples += struct.pack("<h", value)
+    samples += b"\x00\x00" * pad
     stream = pya.open(format=FORMAT, channels=CHANNELS, rate=SAMPLE_RATE, output=True)
     try:
         stream.write(bytes(samples))
+        time.sleep(0.15)  # let the buffer drain before closing (Bluetooth latency)
     finally:
         stream.close()
 
@@ -287,11 +290,13 @@ def record_utterance():
     started = False
     silence_start = None
     start_time = time.time()
+    peak = 0.0
     try:
         while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             samples = np.frombuffer(data, dtype=np.int16)
             rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
+            peak = max(peak, rms)
             now = time.time()
             if rms > SILENCE_RMS:
                 started = True
@@ -306,6 +311,7 @@ def record_utterance():
             if started and now - start_time >= MAX_UTTERANCE:
                 break
             if not started and now - start_time >= NO_SPEECH_TIMEOUT:
+                print(f"  (no speech; mic peak level {peak:.0f}, threshold {SILENCE_RMS})")
                 return None
     finally:
         stream.close()
@@ -366,15 +372,18 @@ def main():
         while True:
             try:
                 wait_for_wake_word(wake_model)
+                print("\nWake word detected.")
                 play_beep()
                 contents = []
                 last_active = time.time()
                 while time.time() - last_active <= CONVERSATION_TIMEOUT:
+                    print("Listening — speak now...")
                     audio = record_utterance()
                     if audio is None:
                         break
                     text = transcribe(whisper, audio)
                     if not text:
+                        print("  (empty transcription)")
                         continue
                     print(f"\033[3mYou: {text}\033[0m")
                     contents.append(
