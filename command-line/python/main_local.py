@@ -51,7 +51,7 @@ TTS_VOICE = os.environ.get("TTS_VOICE", "sk-SK-LukasNeural")
 TTS_FILE = "tts_out.mp3"
 
 # --- brain (free text tier) ---
-FREE_MODEL = os.environ.get("FREE_MODEL", "gemini-2.5-flash")
+FREE_MODEL = os.environ.get("FREE_MODEL", "gemini-2.5-flash-lite")
 SYSTEM_PROMPT = (
     "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, "
     "stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky. Hovor zdvorilo a "
@@ -158,10 +158,18 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-CONFIG = types.GenerateContentConfig(
-    system_instruction=SYSTEM_PROMPT,
-    tools=[{"function_declarations": TOOL_DECLARATIONS}],
-)
+def make_config():
+    """Builds the request config, injecting today's date so the model rarely has
+    to call get_current_time (saving a request) for date/calendar questions."""
+    now = datetime.datetime.now()
+    dated = (
+        f"{SYSTEM_PROMPT} Dnešný dátum je {now.strftime('%Y-%m-%d')} "
+        f"({SLOVAK_WEEKDAYS[now.weekday()]}), aktuálny čas je {now.strftime('%H:%M')}."
+    )
+    return types.GenerateContentConfig(
+        system_instruction=dated,
+        tools=[{"function_declarations": TOOL_DECLARATIONS}],
+    )
 
 
 def play_beep(freq=880, duration=0.25):
@@ -342,12 +350,31 @@ def transcribe(whisper, audio):
     return "".join(segment.text for segment in segments).strip()
 
 
-def ask(client, contents):
+def generate_with_retry(client, contents, config, retries=4):
+    """Calls the model, backing off and retrying on transient 429/503 limits."""
+    delay = 3
+    for attempt in range(retries):
+        try:
+            return client.models.generate_content(
+                model=FREE_MODEL, contents=contents, config=config
+            )
+        except Exception as exc:
+            msg = str(exc)
+            transient = any(
+                code in msg for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
+            )
+            if transient and attempt < retries - 1:
+                print(f"  (rate limited, retrying in {delay}s...)")
+                time.sleep(delay)
+                delay = min(delay * 2, 30)
+                continue
+            raise
+
+
+def ask(client, contents, config):
     """Sends the conversation to Gemini, resolving any tool calls, returns reply text."""
     while True:
-        response = client.models.generate_content(
-            model=FREE_MODEL, contents=contents, config=CONFIG
-        )
+        response = generate_with_retry(client, contents, config)
         contents.append(response.candidates[0].content)
         calls = response.function_calls
         if not calls:
@@ -392,6 +419,7 @@ def main():
                 print("\nWake word detected.")
                 play_beep()
                 contents = []
+                config = make_config()
                 last_active = time.time()
                 while time.time() - last_active <= CONVERSATION_TIMEOUT:
                     print("Listening — speak now...")
@@ -406,7 +434,7 @@ def main():
                     contents.append(
                         types.Content(role="user", parts=[types.Part(text=text)])
                     )
-                    reply, contents = ask(client, contents)
+                    reply, contents = ask(client, contents, config)
                     print(f"Gin: {reply}")
                     speak(reply)
                     last_active = time.time()
