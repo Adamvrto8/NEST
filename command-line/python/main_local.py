@@ -352,12 +352,14 @@ def ask(client, contents):
         calls = response.function_calls
         if not calls:
             return (response.text or "").strip(), contents
-        tool_parts = [
-            types.Part.from_function_response(
-                name=call.name, response=dispatch(call.name, dict(call.args or {}))
+        tool_parts = []
+        for call in calls:
+            args = dict(call.args or {})
+            result = dispatch(call.name, args)
+            print(f"  [tool] {call.name}({args}) -> {str(result)[:160]}")
+            tool_parts.append(
+                types.Part.from_function_response(name=call.name, response=result)
             )
-            for call in calls
-        ]
         contents.append(types.Content(role="user", parts=tool_parts))
 
 
