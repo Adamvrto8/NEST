@@ -14,6 +14,7 @@ import os
 import struct
 import threading
 import time
+from collections import deque
 
 import numpy as np
 import pyaudio
@@ -42,7 +43,7 @@ VOSK_MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", "model")
 WAKE_PHRASES = ["hey gin", "hey jean", "hey gene"]
 
 # --- speech to text ---
-WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
+WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL", "small")
 WHISPER_LANGUAGE = "sk"
 
 # --- text to speech ---
@@ -286,6 +287,7 @@ def record_utterance():
         format=FORMAT, channels=CHANNELS, rate=SAMPLE_RATE, input=True,
         frames_per_buffer=CHUNK,
     )
+    preroll = deque(maxlen=8)  # ~0.5 s of lead-in so the first word isn't clipped
     frames = []
     started = False
     silence_start = None
@@ -299,6 +301,8 @@ def record_utterance():
             peak = max(peak, rms)
             now = time.time()
             if rms > SILENCE_RMS:
+                if not started:
+                    frames.extend(preroll)
                 started = True
                 silence_start = None
                 frames.append(data)
@@ -308,6 +312,8 @@ def record_utterance():
                     silence_start = now
                 elif now - silence_start >= SILENCE_SECONDS:
                     break
+            else:
+                preroll.append(data)
             if started and now - start_time >= MAX_UTTERANCE:
                 break
             if not started and now - start_time >= NO_SPEECH_TIMEOUT:
@@ -317,13 +323,22 @@ def record_utterance():
         stream.close()
     if not frames:
         return None
-    pcm = b"".join(frames)
-    return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    audio = np.frombuffer(b"".join(frames), dtype=np.int16).astype(np.float32) / 32768.0
+    peak_amp = float(np.max(np.abs(audio)))
+    if peak_amp > 0:
+        audio = audio * min(4.0, 0.95 / peak_amp)  # normalize quiet mics, cap the gain
+    return audio
 
 
 def transcribe(whisper, audio):
     """Transcribes Slovak speech to text."""
-    segments, _ = whisper.transcribe(audio, language=WHISPER_LANGUAGE, beam_size=1)
+    segments, _ = whisper.transcribe(
+        audio,
+        language=WHISPER_LANGUAGE,
+        beam_size=5,
+        vad_filter=True,
+        initial_prompt="Rozhovor po slovensky o počasí, správach, kalendári a emailoch.",
+    )
     return "".join(segment.text for segment in segments).strip()
 
 
