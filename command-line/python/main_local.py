@@ -51,7 +51,15 @@ TTS_VOICE = os.environ.get("TTS_VOICE", "sk-SK-LukasNeural")
 TTS_FILE = "tts_out.mp3"
 
 # --- brain (free text tier) ---
-FREE_MODEL = os.environ.get("FREE_MODEL", "gemini-2.5-flash-lite")
+# Tried in order; falls over to the next on rate limits / 503 overload, so one
+# model's daily cap or high-demand spike doesn't drop the turn.
+FREE_MODELS = [
+    m.strip()
+    for m in os.environ.get(
+        "FREE_MODEL", "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash"
+    ).split(",")
+    if m.strip()
+]
 SYSTEM_PROMPT = (
     "Si nápomocný a priateľský domáci hlasový asistent. Vždy odpovedaj po slovensky, "
     "stručne, jasne a prirodzene. Nikdy neodpovedaj po anglicky. Hovor zdvorilo a "
@@ -350,31 +358,37 @@ def transcribe(whisper, audio):
     return "".join(segment.text for segment in segments).strip()
 
 
-def generate_with_retry(client, contents, config, retries=4):
-    """Calls the model, backing off and retrying on transient 429/503 limits."""
-    delay = 3
-    for attempt in range(retries):
-        try:
-            return client.models.generate_content(
-                model=FREE_MODEL, contents=contents, config=config
-            )
-        except Exception as exc:
-            msg = str(exc)
-            transient = any(
-                code in msg for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
-            )
-            if transient and attempt < retries - 1:
-                print(f"  (rate limited, retrying in {delay}s...)")
-                time.sleep(delay)
-                delay = min(delay * 2, 30)
-                continue
-            raise
+def generate(client, contents, config, per_model_retries=2):
+    """Calls the model with retry + fallback across FREE_MODELS, so a model's
+    daily cap or 503 overload fails over instead of dropping the turn."""
+    last_exc = None
+    for model in FREE_MODELS:
+        delay = 2
+        for attempt in range(per_model_retries):
+            try:
+                return client.models.generate_content(
+                    model=model, contents=contents, config=config
+                )
+            except Exception as exc:
+                last_exc = exc
+                transient = any(
+                    code in str(exc)
+                    for code in ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
+                )
+                if transient and attempt < per_model_retries - 1:
+                    print(f"  ({model}: throttled, retry in {delay}s...)")
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                print(f"  ({model}: failed [{str(exc)[:50]}], trying next model...)")
+                break
+    raise last_exc
 
 
 def ask(client, contents, config):
     """Sends the conversation to Gemini, resolving any tool calls, returns reply text."""
     while True:
-        response = generate_with_retry(client, contents, config)
+        response = generate(client, contents, config)
         contents.append(response.candidates[0].content)
         calls = response.function_calls
         if not calls:
