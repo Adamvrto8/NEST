@@ -358,11 +358,15 @@ def transcribe(whisper, audio):
     return "".join(segment.text for segment in segments).strip()
 
 
+_exhausted = set()  # models whose daily cap is hit; skipped for the rest of the run
+
+
 def generate(client, contents, config, per_model_retries=2):
     """Calls the model with retry + fallback across FREE_MODELS, so a model's
     daily cap or 503 overload fails over instead of dropping the turn."""
     last_exc = None
-    for model in FREE_MODELS:
+    models = [m for m in FREE_MODELS if m not in _exhausted] or FREE_MODELS
+    for model in models:
         delay = 2
         for attempt in range(per_model_retries):
             try:
@@ -371,16 +375,17 @@ def generate(client, contents, config, per_model_retries=2):
                 )
             except Exception as exc:
                 last_exc = exc
-                transient = any(
-                    code in str(exc)
-                    for code in ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
-                )
-                if transient and attempt < per_model_retries - 1:
+                text = str(exc)
+                if "RESOURCE_EXHAUSTED" in text or "429" in text:
+                    _exhausted.add(model)  # daily cap won't reset today; stop trying it
+                    print(f"  ({model}: daily cap reached, skipping it from now on...)")
+                    break
+                if any(c in text for c in ("500", "503", "UNAVAILABLE")) and attempt < per_model_retries - 1:
                     print(f"  ({model}: throttled, retry in {delay}s...)")
                     time.sleep(delay)
                     delay *= 2
                     continue
-                print(f"  ({model}: failed [{str(exc)[:50]}], trying next model...)")
+                print(f"  ({model}: failed [{text[:50]}], trying next model...)")
                 break
     raise last_exc
 

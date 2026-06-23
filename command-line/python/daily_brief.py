@@ -17,6 +17,7 @@ import gmail_tools
 USER_NAME = os.environ.get("BRIEF_USER_NAME", "Lubo")
 LATITUDE = float(os.environ.get("BRIEF_LATITUDE", "48.1486"))
 LONGITUDE = float(os.environ.get("BRIEF_LONGITUDE", "17.1077"))
+LOCATION_NAME = os.environ.get("BRIEF_LOCATION_NAME", "Bratislava")
 NEWS_FEED_URL = os.environ.get("BRIEF_NEWS_FEED", "https://www.sme.sk/rss")
 NEWS_COUNT = int(os.environ.get("BRIEF_NEWS_COUNT", "5"))
 MAIL_COUNT = int(os.environ.get("BRIEF_MAIL_COUNT", "5"))
@@ -74,6 +75,7 @@ def get_weather():
     data = resp.json()
     current, daily = data["current"], data["daily"]
     return {
+        "location": LOCATION_NAME,
         "current_temp_c": current["temperature_2m"],
         "condition": WEATHER_CODES.get(current["weather_code"], "neznáme"),
         "today_high_c": daily["temperature_2m_max"][0],
