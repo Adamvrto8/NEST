@@ -2,6 +2,7 @@
 google-genai==2.9.0
 PyAudio==0.2.14
 vosk==0.3.45
+python-dotenv==1.0.1   # load API keys from a local .env file
 
 # Daily brief (weather + news)
 requests==2.34.2

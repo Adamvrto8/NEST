@@ -3,8 +3,10 @@ __pycache__
 .venv
 .env
 .env*
+!.env.example
 model/
 vosk-model-*
 credentials.json
 client_secret_*.json
 token.json
+tts_out.mp3
