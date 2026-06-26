@@ -66,7 +66,11 @@ SYSTEM_PROMPT = (
 )
 
 # --- turn-taking ---
+# Voice-detection threshold (RMS). If SILENCE_RMS is set in the environment we
+# trust it; otherwise it is auto-calibrated from ambient noise at startup so the
+# speaker adapts to any mic (500 is only the pre-calibration fallback).
 SILENCE_RMS = int(os.environ.get("SILENCE_RMS", "500"))
+SILENCE_RMS_FIXED = "SILENCE_RMS" in os.environ
 SILENCE_SECONDS = 1.2
 MAX_UTTERANCE = 12
 NO_SPEECH_TIMEOUT = 6
@@ -297,6 +301,24 @@ def wait_for_wake_word(model):
         stream.close()
 
 
+def calibrate_threshold(seconds=1.2):
+    """Listens to ambient noise and returns a voice threshold tuned to this mic."""
+    stream = pya.open(
+        format=FORMAT, channels=CHANNELS, rate=SAMPLE_RATE, input=True,
+        frames_per_buffer=CHUNK,
+    )
+    levels = []
+    try:
+        for _ in range(int(SAMPLE_RATE / CHUNK * seconds)):
+            data = stream.read(CHUNK, exception_on_overflow=False)
+            samples = np.frombuffer(data, dtype=np.int16)
+            levels.append(float(np.sqrt(np.mean(samples.astype(np.float32) ** 2))))
+    finally:
+        stream.close()
+    ambient = sorted(levels)[len(levels) // 2] if levels else 0.0  # median noise floor
+    return int(max(100, ambient * 1.8))  # trigger just above the noise floor
+
+
 def record_utterance():
     """Records the mic until a pause; returns float32 audio at 16 kHz, or None."""
     stream = pya.open(
@@ -406,11 +428,15 @@ def speak(text):
 
 
 def main():
-    global client
+    global client, SILENCE_RMS
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
     wake_model = load_wake_model()
     print(f"Loading Whisper ({WHISPER_MODEL_SIZE})...")
     whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
+    if not SILENCE_RMS_FIXED:
+        print("Calibrating microphone (stay quiet for a second)...")
+        SILENCE_RMS = calibrate_threshold()
+        print(f"  Voice threshold set to {SILENCE_RMS}.")
     print(f'Smart speaker ready (Claude: {CLAUDE_MODEL}). Waiting for wake word ("{WAKE_PHRASES[0]}")...')
     try:
         while True:
