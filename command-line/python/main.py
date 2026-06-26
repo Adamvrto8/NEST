@@ -8,6 +8,9 @@ from google import genai
 from google.genai import types
 import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
+from dotenv import load_dotenv
+
+load_dotenv()  # read GEMINI_API_KEY (and other secrets) from a local .env file
 
 SetLogLevel(-1)  # silence Vosk/Kaldi startup logging
 

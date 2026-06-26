@@ -23,6 +23,9 @@ from vosk import Model, KaldiRecognizer, SetLogLevel
 from faster_whisper import WhisperModel
 import edge_tts
 import miniaudio
+from dotenv import load_dotenv
+
+load_dotenv()  # read ANTHROPIC_API_KEY (and BRIEF_*/CALENDAR_* overrides) from .env
 
 import gmail_tools
 import calendar_tools
