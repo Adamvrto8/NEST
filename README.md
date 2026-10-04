@@ -1,83 +1,47 @@
-# Gemini Live API Examples
+# NEST — Slovak voice smart speaker
 
-The Live API enables low-latency, real-time voice and video interactions with
-Gemini. It processes continuous streams of audio, video, or text to deliver
-immediate, human-like spoken responses, creating a natural conversational
-experience for your users.
+A hands-free, Slovak-language voice assistant for a Raspberry Pi 4 (or any computer with a mic and a speaker). It idles until it hears a wake word, listens, and answers out loud in Slovak.
 
-![Live API Overview](https://ai.google.dev/gemini-api/docs/images/live-api-overview.png)
+It can search the web, read and draft Gmail, read and create Google Calendar events, set timers, and give a personalized morning brief with weather, news, calendar and unread mail.
 
-[Try the Live API in Google AI Studio](https://aistudio.google.com/live)
+## How it works
 
-## Example use cases
+```
+mic → wake word (Vosk, offline) → speech in → model with tools → speech out → speaker
+                                                    │
+                          timers · Gmail · Calendar · daily brief · web search
+```
 
-Live API can be used to build real-time voice and video agents for a
-variety of industries, including:
+The assistant comes in three interchangeable variants that share the wake word, the tools and the Slovak voice, but use a different model:
 
-*   **E-commerce and retail:** Shopping assistants that offer personalized
-    recommendations and support agents that resolve customer issues.
-*   **Gaming:** Interactive non-player characters (NPCs), in-game help
-    assistants, and real-time translation of in-game content.
-*   **Next-gen interfaces:** Voice- and video-enabled experiences in robotics,
-    smart glasses, and vehicles.
-*   **Healthcare:** Health companions for patient support and education.
-*   **Financial services:** AI advisors for wealth management and investment
-    guidance.
-*   **Education:** AI mentors and learner companions that provide personalized
-    instruction and feedback.
+| Variant | File | Branch | Model | Speech in → out | Cost |
+| --- | --- | --- | --- | --- | --- |
+| Live | `main.py` | `main` | Gemini Live (real-time audio) | Gemini native | Paid, needs Google Cloud billing |
+| Free | `main_local.py` | `free-pipeline` | Gemini free text tier | Whisper (local) → edge-tts | Free |
+| Claude | `main_claude.py` | `claude-pipeline` | Claude (Anthropic) | Whisper (local) → edge-tts | Paid, cheap on Haiku |
 
-## Key features
+## What I built
 
-Live API offers a comprehensive set of features for building
-robust voice and video agents:
+Everything for the speaker lives in [`command-line/python`](command-line/python):
 
-*   [**Multilingual support**](https://ai.google.dev/gemini-api/docs/live-guide#supported-languages):
-    Converse in 70 supported languages.
-*   [**Barge-in**](https://ai.google.dev/gemini-api/docs/live-guide#interruptions):
-    Users can interrupt the model at any time for responsive interactions.
-*   [**Tool use**](https://ai.google.dev/gemini-api/docs/live-tools):
-    Integrates tools like function calling and Google Search for dynamic
-    interactions.
-*   [**Audio transcriptions**](https://ai.google.dev/gemini-api/docs/live-guide#audio-transcription):
-    Provides text transcripts of both user input and model output.
-*   [**Proactive audio**](https://ai.google.dev/gemini-api/docs/live-guide#proactive-audio):
-    Lets you control when the model responds and in what contexts.
-*   [**Affective dialog**](https://ai.google.dev/gemini-api/docs/live-guide#affective-dialog):
-    Adapts response style and tone to match the user's input expression.
+- Offline wake word with Vosk, including a wake beep and homophone handling
+- A function-calling layer with timer, time and date tools
+- Gmail tools (read and draft, never send) and Google Calendar tools (read and create) behind one OAuth helper
+- A daily brief skill that combines weather (Open-Meteo), news headlines (RSS), today's calendar and unread mail, all returned in Slovak
+- Three model back ends behind the same tools: Gemini Live, Whisper + Gemini text, Whisper + Claude
+- A systemd unit and automatic recovery from network and session errors, so it can run 24/7 on a Pi
 
-## Technical specifications
+## Run it
 
-The following table outlines the technical specifications for the
-Live API:
+Setup, API keys, the wake-word model and the Raspberry Pi service are described step by step in the [speaker README](command-line/python/README.md).
 
-| Category          | Details                                                                                     |
-| :---------------- | :------------------------------------------------------------------------------------------ |
-| Input modalities  | Audio (raw 16-bit PCM audio, 16kHz, little-endian), images/video (JPEG <= 1FPS), text       |
-| Output modalities | Audio (raw 16-bit PCM audio, 24kHz, little-endian), text                                    |
-| Protocol          | Stateful WebSocket connection (WSS)                                                         |
+```bash
+cd command-line/python
+pip install -r requirements.txt
+cp .env.example .env      # add your GEMINI_API_KEY
+python main.py
+```
 
-## Examples
+## Credits
 
-*   **[Gen AI SDK Python example](./gemini-live-genai-python-sdk/README.md)**: Recommended for ease of use. Connect to the Gemini Live API using the Gen AI SDK to build a real-time multimodal application with a Python backend.
-*   **[Epheremal tokens and raw WebSocket example](./gemini-live-ephemeral-tokens-websocket/README.md)**: RAW protocol control. Connect to the Gemini Live API using WebSockets to build a real-time multimodal application with a JavaScript frontend and a Python backend.
-*   **[Command-line Python example](./command-line/python/README.md)**: A minimal command-line app that streams microphone audio to the Gemini Live API and plays back the response in real time using Python.
-*   **[Command-line Node.js example](./command-line/node/README.md)**: A minimal command-line app that streams microphone audio to the Gemini Live API and plays back the response in real time using Node.js.
-*   **[Command-line Translation Python example](./command-line/python/README.md#real-time-audio-stream-translation)**: A command-line tool that streams a remote audio URL into the Gemini Live Translate model, plays back the translated audio, and prints transcripts with language codes in real time.
-*   **[Broadcast Translation Web App (LiveKit)](../gemini-live-translate-livekit/README.md)**: A production-ready multilingual broadcast app built with Next.js, LiveKit, and the Gemini Live API that translates speaker audio to multiple target languages concurrently with low latency.
-
-> [!TIP]
-> Install the [Gemini Live API Dev](https://github.com/google-gemini/gemini-skills?tab=readme-ov-file#gemini-live-api-dev) skill for AI-assisted development with the Live API in your coding agents.
-
-## Partner integrations
-
-To streamline the development of real-time audio and video apps, you can use
-a third-party integration that supports the Gemini Live
-API over WebRTC or WebSockets.
-
-*   [LiveKit](https://docs.livekit.io/agents/models/realtime/plugins/gemini/): Use the Gemini Live API with LiveKit Agents.
-*   [Pipecat by Daily](https://docs.pipecat.ai/guides/features/gemini-live): Create a real-time AI chatbot using Gemini Live and Pipecat.
-*   [Fishjam by Software Mansion](https://docs.fishjam.io/tutorials/gemini-live-integration): Create live video and audio streaming applications with Fishjam.
-*   [Vision Agents by Stream](https://visionagents.ai/integrations/gemini): Build real-time voice and video AI applications with Vision Agents.
-*   [Voximplant](https://voximplant.com/products/gemini-client): Connect inbound and outbound calls to Live API with Voximplant.
-*   [Agent Development Kit (ADK)](https://google.github.io/adk-docs/streaming/): Create an agent and use the Agent Development Kit (ADK) Streaming to enable voice and video communication.
-*   [Firebase AI SDK](https://firebase.google.com/docs/ai-logic/live-api?api=dev): Get started with the Gemini Live API using Firebase AI Logic.
+The project started from Google's Gemini Live API example code. The other folders in this repository (`gemini-live-ephemeral-tokens-websocket`, `gemini-live-genai-python-sdk`, `gemini-live-translate-livekit`, `command-line/node`) are those upstream samples, kept unchanged.
